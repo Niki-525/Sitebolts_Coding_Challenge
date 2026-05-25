@@ -1,0 +1,90 @@
+"""
+API Service Module
+
+Add relevant logic that can be abstracted away from the route method to the challenge here
+
+"""
+#--------------------service.py---------------------------------------------
+import httpx
+from fastapi import HTTPException
+import store
+from schemas import TypeCreate, TypeOut, PokemonCreate, PokemonOut
+from config import settings
+
+async def _fetch_from_pokeapi(path: str) -> dict:
+     """
+    Single async httpx call to PokeAPI.
+    Raises 404 HTTPException if PokeAPI returns 404.
+    Raises 502 for any other upstream error (bad gateway — their API issue, not our problem).
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            r=await client.get(f"{settings.pokeapi_base_url}/{path}")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"'{path}', detail=PokeAPI is unreachable: {e}")
+        if r.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"'{path}' not found in PokeAPI")
+        if r.status_code !=200:
+            raise HTTPException (status_code=502, detail=f"PokeAPI returned {r.status_code}")
+        return r.json()
+
+#type services
+async def create_type(body: TypeCreate)->TypeOut:
+   #POST /types logic.
+   # 1. Check 409 — name already exists in store.
+   for existing in store._types.values():
+        if existing["name"].lower() == body.name.lower():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Type '{body.name}' already exists with ID {existing['id']}"
+            )
+
+     # 2. Validate the name exists in PokeAPI.
+    await _fetch_from_pokeapi(f"type/{body.name.lower()}")
+
+   # 3. Assign a new ID from the counter and insert into store._types.
+    new_id = store.next.type_id()
+    record = {"id": new_id, "name": body.name.lower()}
+    store._types[new_id]= record
+    return TypeOut(**record)
+
+def list_types() -> list[TypeOut]:
+    #GET /types logic; read from store; no I/O
+    return [TypeOut(**t) for t in store._types.values()]
+
+
+#pokemon services
+async def create_pokemon(body: PokemonCreate)->PokemonOut
+#check if id exists in store
+parent_type=store._types.get(body.type_id)
+if parent_type is None:
+    raise HTTPException(
+        status_code=404,
+        detail=f"Type ID {body.type_id} not found"
+    )
+#fetch from PokeAPI
+data = await _fetch_from_pokeapi(f"pokemon/{body.name.lower()}")
+#insert into store
+new_id = store.next_pokemon_id()
+recore = {
+    "id": new_id,
+    "name": data["name"],
+    "type_id": body.type_id,
+    "height": data["height"],
+    "weight": data["weight"],
+    "base_experience": data.get("base_experience"),
+}
+store._pokemon[new_id]=record
+return PokemonOut(**record, type_name=parent_type["name"])
+
+def list_pokemon() -> list[PokemonOut]:
+    """
+    GET /pokemon logic
+    Resolve type_name for every pokemon via the store
+    """
+    result=[]
+    for p in store._pokemon.values():
+        parent_type= store._types.get(p["type_id"])
+        type_name=parent_type["name"] if parent_type else "unknown"
+        result.append(PokemonOut(**p, type_name=type_name))
+        return result
