@@ -1,0 +1,22 @@
+[project]
+name = "siteboltsfastapicodingchallenge"
+dependencies = [
+    "pydantic_settings",
+    "pydantic",
+    "fastapi",
+    "uvicorn",
+    "pymongo",
+    "python-multipart",
+    "motor",
+    "aiohttp",
+    "pydantic_mongo",
+    "logfire",
+    "logfire[fastapi]",
+    "pydantic[email]",
+    "requests",
+    "asyncio",
+    "msal",
+    "pypdf2",
+    "bs4",
+    "httpx"
+]
