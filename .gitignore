@@ -1,0 +1,5 @@
+.env
+.pem
+cert
+uploads
+.DS_Store
